@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Ubuntu 26.04 上的 ROS 1 Noetic 完整容器化部署（含 tmux 与桌面快捷方式）
+# 用法：./install_ros1_ubuntu26.sh [--repair-shortcut]
 set -Eeuo pipefail
 
 readonly CONTAINER_NAME="${ROS1_CONTAINER_NAME:-ros1_course}"
@@ -10,6 +11,88 @@ readonly ROS_MIRROR="https://mirrors.ustc.edu.cn/ros/ubuntu"
 note() { echo "==> $*"; }
 die() { echo "错误：$*" >&2; exit 1; }
 
+create_desktop_shortcut() {
+  local desktop_dir desktop_file app_dir app_file
+
+  if command -v xdg-user-dir >/dev/null 2>&1; then
+    desktop_dir="$(xdg-user-dir DESKTOP 2>/dev/null || true)"
+  fi
+  if [[ -z "${desktop_dir:-}" || "$desktop_dir" == "$HOME" ]]; then
+    if [[ -d "$HOME/桌面" ]]; then
+      desktop_dir="$HOME/桌面"
+    else
+      desktop_dir="$HOME/Desktop"
+    fi
+  fi
+
+  if [[ ! -x "$HOME/.local/bin/launch-rostmux" ]]; then
+    [[ -x "$HOME/.local/bin/rostmux" ]] || \
+      die "缺少 rostmux 命令，请先完整运行安装脚本。"
+    mkdir -p "$HOME/.local/bin"
+    printf '%s\n' \
+      '#!/usr/bin/env bash' \
+      'set -Eeuo pipefail' \
+      'if command -v ptyxis >/dev/null; then exec ptyxis --new-window --title="ROS 1 分屏" -- bash -lc "exec rostmux"; fi' \
+      'if command -v kgx >/dev/null; then exec kgx --title="ROS 1 分屏" -- bash -lc "exec rostmux"; fi' \
+      'if command -v gnome-terminal >/dev/null; then exec gnome-terminal --title="ROS 1 分屏" -- bash -lc "exec rostmux"; fi' \
+      'if command -v konsole >/dev/null; then exec konsole -e bash -lc "exec rostmux"; fi' \
+      'exec x-terminal-emulator -e bash -lc "exec rostmux"' \
+      > "$HOME/.local/bin/launch-rostmux"
+    chmod 0755 "$HOME/.local/bin/launch-rostmux"
+  fi
+
+  app_dir="$HOME/.local/share/applications"
+  desktop_file="$desktop_dir/ROS1.desktop"
+  app_file="$app_dir/ROS1.desktop"
+  mkdir -p "$desktop_dir" "$app_dir"
+
+  for shortcut_file in "$desktop_file" "$app_file"; do
+    printf '%s\n' \
+      '[Desktop Entry]' \
+      'Version=1.0' \
+      'Type=Application' \
+      'Name=ROS1' \
+      'Comment=打开 ROS 1 Noetic 四分屏开发环境' \
+      "Exec=$HOME/.local/bin/launch-rostmux" \
+      'Icon=utilities-terminal' \
+      'Terminal=false' \
+      'Categories=Development;' \
+      'StartupNotify=true' > "$shortcut_file"
+    chmod 0755 "$shortcut_file"
+    if command -v desktop-file-validate >/dev/null 2>&1; then
+      desktop-file-validate "$shortcut_file"
+    fi
+  done
+
+  if command -v gio >/dev/null 2>&1; then
+    gio set "$desktop_file" metadata::trusted true || \
+      echo "警告：无法自动标记桌面图标为可信，请右键图标选择“允许运行”。" >&2
+  fi
+  command -v update-desktop-database >/dev/null 2>&1 && \
+    update-desktop-database "$app_dir" || true
+
+  # GNOME 的桌面由 DING 扩展显示；安装但未启用时主动启用。
+  if command -v gnome-extensions >/dev/null 2>&1 && \
+    gnome-extensions list | grep -qx 'ding@rastersoft.com'; then
+    gnome-extensions enable ding@rastersoft.com || \
+      echo "提示：桌面图标扩展将在下次登录后生效。" >&2
+  fi
+
+  note "桌面图标已创建：$desktop_file"
+  note "应用菜单入口已创建：$app_file"
+}
+
+repair_shortcut=false
+case "${1:-}" in
+  "") ;;
+  --repair-shortcut) repair_shortcut=true ;;
+  -h|--help)
+    sed -n '1,3p' "$0"
+    exit 0
+    ;;
+  *) die "未知参数：$1" ;;
+esac
+
 [[ "$EUID" -ne 0 ]] || die "请使用普通用户运行；脚本会在需要时调用 sudo。"
 [[ -r /etc/os-release ]] || die "无法识别操作系统。"
 # shellcheck disable=SC1091
@@ -18,10 +101,16 @@ source /etc/os-release
   die "此脚本仅面向 Ubuntu 26.x；当前系统：${PRETTY_NAME:-未知}"
 command -v sudo >/dev/null || die "未找到 sudo。"
 
+if "$repair_shortcut"; then
+  create_desktop_shortcut
+  exit 0
+fi
+
 note "安装 Docker、tmux 和常用开发工具"
 sudo apt-get update
 sudo apt-get install -y docker.io tmux git vim nano htop tree curl wget unzip zip \
-  net-tools iputils-ping openssh-client xdg-user-dirs
+  net-tools iputils-ping openssh-client xdg-user-dirs desktop-file-utils \
+  gnome-shell-extension-desktop-icons-ng
 sudo systemctl enable --now docker
 
 docker_run=(docker)
@@ -169,18 +258,7 @@ if ! grep -qsF '$HOME/.local/bin' "$HOME/.bashrc" 2>/dev/null; then
 fi
 
 note "创建桌面快捷方式"
-desktop_dir="$(xdg-user-dir DESKTOP 2>/dev/null || true)"
-[[ -n "$desktop_dir" && "$desktop_dir" != "$HOME" ]] || desktop_dir="$HOME/Desktop"
-mkdir -p "$desktop_dir"
-desktop_file="$desktop_dir/ROS1.desktop"
-printf '%s\n' \
-  '[Desktop Entry]' 'Version=1.0' 'Type=Application' 'Name=ROS1' \
-  'Comment=打开 ROS 1 Noetic 四分屏开发环境' \
-  "Exec=$HOME/.local/bin/launch-rostmux" \
-  'Icon=utilities-terminal' 'Terminal=false' \
-  'Categories=Development;Utility;' 'StartupNotify=true' > "$desktop_file"
-chmod 0755 "$desktop_file"
-command -v gio >/dev/null && gio set "$desktop_file" metadata::trusted true 2>/dev/null || true
+create_desktop_shortcut
 
 if command -v code >/dev/null 2>&1; then
   note "安装 VS Code ROS 开发扩展"
@@ -194,5 +272,5 @@ note "部署完成"
 echo "项目目录：$PROJECT_DIR"
 echo "单终端命令：ros1"
 echo "四分屏命令：rostmux"
-echo "桌面快捷方式：$desktop_file"
+echo "桌面快捷方式：$(xdg-user-dir DESKTOP)/ROS1.desktop"
 echo "若刚加入 docker 组，请重新登录一次系统。"
