@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+exec ptyxis --new-window --title='ROS 1 分屏' -- bash -lc 'exec rostmux'
