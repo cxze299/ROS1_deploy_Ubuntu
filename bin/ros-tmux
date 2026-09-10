@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Every invocation gets an independent workspace.  Re-attaching a fixed session
+# makes a new terminal mirror old panes, which is confusing for course work.
+session_name="ros1-$(date +%s)-$RANDOM"
+start_dir="/home/cxze/CodeX/ROS"
+ros_command="/home/cxze/.local/bin/ros1"
+
+tmux new-session -d -s "$session_name" -c "$start_dir" "$ros_command"
+tmux split-window -h -t "$session_name":0 -c "$start_dir" "$ros_command"
+tmux split-window -v -t "$session_name":0.0 -c "$start_dir" "$ros_command"
+tmux split-window -v -t "$session_name":0.2 -c "$start_dir" "$ros_command"
+tmux select-layout -t "$session_name":0 tiled
+
+exec tmux attach-session -t "$session_name"
