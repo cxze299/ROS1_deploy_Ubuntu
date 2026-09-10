@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! docker container inspect ros1_course >/dev/null 2>&1; then
+  echo "Run 'ros1' once before using ros1-root." >&2
+  exit 1
+fi
+
+if [ "$(docker container inspect -f '{{.State.Running}}' ros1_course)" != "true" ]; then
+  docker start ros1_course >/dev/null
+fi
+
+docker exec -it \
+  --user root \
+  --env "HOME=/root" \
+  --env "DISPLAY=${DISPLAY:-:0}" \
+  --env XAUTHORITY=/tmp/.docker.xauth \
+  --workdir /workspace/catkin_ws \
+  ros1_course bash --rcfile /workspace/.ros1/bashrc -i
