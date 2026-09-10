@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if docker container inspect ros1_course >/dev/null 2>&1; then
+  docker stop ros1_course >/dev/null
+  echo "ROS 1 course container stopped."
+else
+  echo "ROS 1 course container has not been created yet."
+fi
