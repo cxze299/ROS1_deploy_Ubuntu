@@ -9,7 +9,13 @@ chmod +x install_ros1_ubuntu26.sh
 ./install_ros1_ubuntu26.sh
 ```
 
-它会安装 Docker、tmux 和开发工具，运行 Noetic `desktop-full` 容器，安装常用仿真/导航/视觉包，并创建 `ros1`、`rostmux` 命令及桌面快捷方式。默认工程目录为 `~/ROS1`；可在首次运行时用 `ROS1_HOME=/目标目录 ./install_ros1_ubuntu26.sh` 修改。脚本可重复执行，已有同名容器会继续沿用原来的工程目录。
+它默认只部署本机当前使用的基础环境：Docker、tmux、Noetic `desktop-full` 容器、`ros1`/`rostmux` 命令和桌面快捷方式。宿主机不会额外安装 Vim、htop 等无关工具。默认工程目录为 `~/ROS1`；可在首次运行时用 `ROS1_HOME=/目标目录 ./install_ros1_ubuntu26.sh` 修改。脚本可重复执行，已有同名容器会继续沿用原来的工程目录。
+
+默认不额外安装 TurtleBot3、导航、视觉等大体积扩展包。如果确实需要，再执行：
+
+```bash
+./install_ros1_ubuntu26.sh --extras
+```
 
 如果 ROS 已安装完成，但桌面没有出现 `ROS1` 图标，不需要重新安装，执行：
 
@@ -25,7 +31,7 @@ chmod +x install_ros1_ubuntu26.sh
 ./install_ros1_ubuntu26.sh --doctor
 ```
 
-每次安装的完整日志保存在 `~/.local/state/ros1-deploy/`。脚本会预检 Ubuntu 版本、amd64 架构和至少 15 GiB 可用空间，Docker 镜像支持多个国内地址重试。若有自选镜像代理，可使用：
+每次安装的完整日志保存在 `~/.local/state/ros1-deploy/`。脚本会检查 Ubuntu 版本和 amd64 架构；磁盘低于 8 GiB 时只警告，不会主动终止。Docker 镜像支持多个国内地址重试。若有自选镜像代理，可使用：
 
 ```bash
 ROS1_IMAGE_MIRROR=镜像地址/osrf/ros:noetic-desktop-full ./install_ros1_ubuntu26.sh
