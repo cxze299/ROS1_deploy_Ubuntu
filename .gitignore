@@ -1,0 +1,6 @@
+.ros1/Xauthority
+.ros-home/
+catkin_ws/build/
+catkin_ws/devel/
+catkin_ws/install/
+catkin_ws/logs/
