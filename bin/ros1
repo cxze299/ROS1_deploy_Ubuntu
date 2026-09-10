@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+container_name="ros1_course"
+image_name="osrf/ros:noetic-desktop-full"
+project_dir="/home/cxze/CodeX/ROS"
+uid_value="$(id -u)"
+gid_value="$(id -g)"
+
+mkdir -p "$project_dir/catkin_ws/src" "$project_dir/.ros-home/.ros"
+
+# Copy the current Xwayland cookie to a stable bind-mounted path for GUI tools.
+if [ -n "${XAUTHORITY:-}" ] && [ -r "$XAUTHORITY" ]; then
+  cp "$XAUTHORITY" "$project_dir/.ros1/Xauthority"
+  chmod 600 "$project_dir/.ros1/Xauthority"
+fi
+
+if ! docker container inspect "$container_name" >/dev/null 2>&1; then
+  docker run -d \
+    --name "$container_name" \
+    --hostname ros1-course \
+    --network host \
+    --restart unless-stopped \
+    --user "$uid_value:$gid_value" \
+    --workdir /workspace/catkin_ws \
+    --env "HOME=/tmp/ros-home" \
+    --env "DISPLAY=${DISPLAY:-:0}" \
+    --env XAUTHORITY=/tmp/.docker.xauth \
+    --env QT_X11_NO_MITSHM=1 \
+    --volume "$project_dir:/workspace" \
+    --volume "$project_dir/.ros-home:/tmp/ros-home" \
+    --volume /tmp/.X11-unix:/tmp/.X11-unix:rw \
+    --volume "$project_dir/.ros1/Xauthority:/tmp/.docker.xauth:ro" \
+    "$image_name" sleep infinity >/dev/null
+elif [ "$(docker container inspect -f '{{.State.Running}}' "$container_name")" != "true" ]; then
+  docker start "$container_name" >/dev/null
+fi
+
+# Give the host UID/GID names inside the container to keep interactive shells clean.
+docker exec --user root "$container_name" bash -c '
+  getent group '"$gid_value"' >/dev/null || groupadd --gid '"$gid_value"' hostuser
+  getent passwd '"$uid_value"' >/dev/null || useradd --uid '"$uid_value"' --gid '"$gid_value"' --home-dir /tmp/ros-home --no-create-home hostuser
+' >/dev/null
+
+if [ -t 0 ] && [ -t 1 ]; then
+  docker exec -it \
+    --user "$uid_value:$gid_value" \
+    --env "HOME=/tmp/ros-home" \
+    --env "DISPLAY=${DISPLAY:-:0}" \
+    --env XAUTHORITY=/tmp/.docker.xauth \
+    --workdir /workspace/catkin_ws \
+    "$container_name" bash --rcfile /workspace/.ros1/bashrc -i
+else
+  docker exec \
+    --user "$uid_value:$gid_value" \
+    --env "HOME=/tmp/ros-home" \
+    --env "DISPLAY=${DISPLAY:-:0}" \
+    --env XAUTHORITY=/tmp/.docker.xauth \
+    --workdir /workspace/catkin_ws \
+    "$container_name" bash --rcfile /workspace/.ros1/bashrc -i
+fi
