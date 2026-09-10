@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Ubuntu 26.04 上的 ROS 1 Noetic 完整容器化部署（含 tmux 与桌面快捷方式）
-# 用法：./install_ros1_ubuntu26.sh [--repair-shortcut|--doctor]
+# 用法：./install_ros1_ubuntu26.sh [--extras|--repair-shortcut|--doctor]
 set -Eeuo pipefail
 
 readonly CONTAINER_NAME="${ROS1_CONTAINER_NAME:-ros1_course}"
@@ -120,17 +120,20 @@ create_desktop_shortcut() {
 }
 
 repair_shortcut=false
+install_extras=false
 doctor_mode=false
-case "${1:-}" in
-  "") ;;
-  --repair-shortcut) repair_shortcut=true ;;
-  --doctor) doctor_mode=true ;;
-  -h|--help)
-    sed -n '1,3p' "$0"
-    exit 0
-    ;;
-  *) die "未知参数：$1" ;;
-esac
+for argument in "$@"; do
+  case "$argument" in
+    --extras) install_extras=true ;;
+    --repair-shortcut) repair_shortcut=true ;;
+    --doctor) doctor_mode=true ;;
+    -h|--help)
+      sed -n '1,3p' "$0"
+      exit 0
+      ;;
+    *) die "未知参数：$argument" ;;
+  esac
+done
 
 [[ "$EUID" -ne 0 ]] || die "请使用普通用户运行；脚本会在需要时调用 sudo。"
 [[ -r /etc/os-release ]] || die "无法识别操作系统。"
@@ -159,14 +162,15 @@ fi
 [[ "$(uname -m)" == "x86_64" ]] || \
   die "当前仅支持 amd64/x86_64；osrf/ros:noetic-desktop-full 没有可靠的 ARM 桌面镜像。"
 available_kb="$(df -Pk "$HOME" | awk 'NR==2 {print $4}')"
-(( available_kb >= 15 * 1024 * 1024 )) || \
-  die "磁盘可用空间不足 15 GiB，无法可靠安装完整 ROS 与 Gazebo。"
+if (( available_kb < 8 * 1024 * 1024 )); then
+  echo "警告：当前磁盘可用空间低于 8 GiB，Docker 可能在拉取镜像时提示空间不足。" >&2
+  echo "脚本将继续执行，不再因预估空间主动终止。" >&2
+fi
 
-stage "安装 Docker、tmux 和常用开发工具"
+stage "安装 Docker、tmux 和桌面启动所需工具"
 sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 update
 sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y \
-  docker.io tmux git vim nano htop tree curl wget unzip zip ca-certificates \
-  net-tools iputils-ping openssh-client xdg-user-dirs desktop-file-utils \
+  docker.io tmux curl ca-certificates xdg-user-dirs desktop-file-utils \
   gnome-shell-extension-desktop-icons-ng
 sudo systemctl enable --now docker
 
@@ -261,8 +265,9 @@ stage "配置国内 ROS 源并安装必需工具"
     python3-rosdep python3-catkin-tools python3-vcstool
 "
 
-stage "安装仿真、导航与视觉扩展包"
-if ! "${docker_run[@]}" exec --user root "$CONTAINER_NAME" bash -c "
+if "$install_extras"; then
+  stage "安装可选的仿真、导航与视觉扩展包"
+  if ! "${docker_run[@]}" exec --user root "$CONTAINER_NAME" bash -c "
   DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y \
     ros-noetic-turtlesim ros-noetic-rqt ros-noetic-rqt-graph \
     ros-noetic-rqt-tf-tree ros-noetic-tf2-tools ros-noetic-xacro \
@@ -275,9 +280,10 @@ if ! "${docker_run[@]}" exec --user root "$CONTAINER_NAME" bash -c "
     ros-noetic-robot-localization ros-noetic-image-transport \
     ros-noetic-cv-bridge ros-noetic-vision-opencv ros-noetic-pcl-ros \
     ros-noetic-usb-cam
-"; then
-  echo "警告：部分扩展包安装失败；ROS desktop-full 主体仍可使用。" >&2
-  echo "稍后重新运行脚本即可继续补装。" >&2
+  "; then
+    echo "警告：部分扩展包安装失败；ROS desktop-full 主体仍可使用。" >&2
+    echo "稍后使用 --extras 重新运行即可继续补装。" >&2
+  fi
 fi
 
 stage "配置容器内 ROS 环境"
