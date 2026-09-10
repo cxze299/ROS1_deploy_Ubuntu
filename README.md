@@ -19,6 +19,18 @@ chmod +x install_ros1_ubuntu26.sh
 
 脚本会把入口同时写入实际桌面目录和 `~/.local/share/applications`，设置为可信可执行，并启用 GNOME 的 Desktop Icons NG 扩展。因此也可以在应用菜单中搜索 `ROS1` 启动。
 
+如果安装中断，修复网络后直接重复运行即可。查看环境和完成状态：
+
+```bash
+./install_ros1_ubuntu26.sh --doctor
+```
+
+每次安装的完整日志保存在 `~/.local/state/ros1-deploy/`。脚本会预检 Ubuntu 版本、amd64 架构和至少 15 GiB 可用空间，Docker 镜像支持多个国内地址重试。若有自选镜像代理，可使用：
+
+```bash
+ROS1_IMAGE_MIRROR=镜像地址/osrf/ros:noetic-desktop-full ./install_ros1_ubuntu26.sh
+```
+
 ## Ubuntu 20.04
 
 `install_ros1_cn.sh` 会在 **Ubuntu 20.04** 上完整安装 ROS 1 Noetic，并使用中科大 ROS 软件镜像。它会配置签名密钥、初始化 `rosdep`、创建 `~/catkin_ws`，并将 ROS 环境写入 `~/.bashrc`。
