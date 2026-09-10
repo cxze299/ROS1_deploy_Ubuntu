@@ -11,6 +11,14 @@ chmod +x install_ros1_ubuntu26.sh
 
 它会安装 Docker、tmux 和开发工具，运行 Noetic `desktop-full` 容器，安装常用仿真/导航/视觉包，并创建 `ros1`、`rostmux` 命令及桌面快捷方式。默认工程目录为 `~/ROS1`；可在首次运行时用 `ROS1_HOME=/目标目录 ./install_ros1_ubuntu26.sh` 修改。脚本可重复执行，已有同名容器会继续沿用原来的工程目录。
 
+如果 ROS 已安装完成，但桌面没有出现 `ROS1` 图标，不需要重新安装，执行：
+
+```bash
+./install_ros1_ubuntu26.sh --repair-shortcut
+```
+
+脚本会把入口同时写入实际桌面目录和 `~/.local/share/applications`，设置为可信可执行，并启用 GNOME 的 Desktop Icons NG 扩展。因此也可以在应用菜单中搜索 `ROS1` 启动。
+
 ## Ubuntu 20.04
 
 `install_ros1_cn.sh` 会在 **Ubuntu 20.04** 上完整安装 ROS 1 Noetic，并使用中科大 ROS 软件镜像。它会配置签名密钥、初始化 `rosdep`、创建 `~/catkin_ws`，并将 ROS 环境写入 `~/.bashrc`。
